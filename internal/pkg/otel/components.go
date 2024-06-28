@@ -22,6 +22,9 @@ import (
 	kubeletstatsreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver"
 	otlpreceiver "go.opentelemetry.io/collector/receiver/otlpreceiver"
 
+	filebeatreceiver "github.com/elastic/beats/v7/x-pack/filebeat/filebeatreceiver"
+	metricbeatreceiver "github.com/elastic/beats/v7/x-pack/metricbeat/metricbeatreceiver"
+
 	// Processors:
 	attributesprocessor "github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor" // for modifying signal attributes
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
@@ -60,6 +63,8 @@ func components() (otelcol.Factories, error) {
 		k8sclusterreceiver.NewFactory(),
 		hostmetricsreceiver.NewFactory(),
 		httpcheckreceiver.NewFactory(),
+		filebeatreceiver.NewFactory(),
+		metricbeatreceiver.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err

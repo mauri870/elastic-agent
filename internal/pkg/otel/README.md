@@ -50,6 +50,7 @@ This section provides a summary of components included in the Elastic Distributi
 | debugexporter | v0.103.0|
 | otlpexporter | v0.103.0|
 | otlphttpexporter | v0.103.0|
+| replace | github.com/open-telemetry/opentelemetry-collector-contrib/exporter/elasticsearchexporter =&gt; github.com/leehinman/opentelemetry-collector-contrib/exporter/elasticsearchexporter v0.0.0-20240627185214-3068cd9ff51b|
 
 
 
