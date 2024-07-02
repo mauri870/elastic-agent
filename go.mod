@@ -413,4 +413,4 @@ replace github.com/elastic/elastic-agent-libs => github.com/leehinman/elastic-ag
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/exporter/elasticsearchexporter => github.com/leehinman/opentelemetry-collector-contrib/exporter/elasticsearchexporter v0.0.0-20240627185214-3068cd9ff51b
 
-replace github.com/elastic/beats/v7 => github.com/leehinman/beats/v7 v7.0.0-alpha2.0.20240627221915-fff6331558cc
+replace github.com/elastic/beats/v7 => github.com/leehinman/beats/v7 v7.0.0-alpha2.0.20240702183952-8245d5c3f4e5

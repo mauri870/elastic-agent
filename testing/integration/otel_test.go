@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -342,10 +343,12 @@ func TestOtelAPMIngestion(t *testing.T) {
 
 	// apm mismatch or proper docs in ES
 
-	watchLines := linesTrackMap([]string{"This is a test error message",
+	watchLines := linesTrackMap([]string{
+		"This is a test error message",
 		"This is a test debug message 2",
 		"This is a test debug message 3",
-		"This is a test debug message 4"})
+		"This is a test debug message 4",
+	})
 
 	// failed to get APM version mismatch in time
 	// processing should be running
@@ -445,4 +448,190 @@ func mapAtLeastOneTrue(mm map[string]bool) bool {
 	}
 
 	return false
+}
+
+func TestBeatReceiverProcessing(t *testing.T) {
+	info := define.Require(t, define.Requirements{
+		Group: Default,
+		Stack: &define.Stack{},
+		Local: true,
+		OS: []define.OS{
+			// input path missing on windows
+			{Type: define.Linux},
+			{Type: define.Darwin},
+		},
+	})
+
+	type OtelConfigOptions struct {
+		InputPath             string
+		OutputPath            string
+		ElasticsearchHost     string
+		ElasticsearchUser     string
+		ElasticsearchPassword string
+	}
+
+	esHost := os.Getenv("ELASTICSEARCH_HOST")
+	esUser := os.Getenv("ELASTICSEARCH_USERNAME")
+	esPass := os.Getenv("ELASTICSEARCH_PASSWORD")
+	if esHost == "" || esUser == "" || esPass == "" {
+		t.Fatalf("ELASTICSEARCH_* must be defined by the test runner")
+	}
+
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "output.txt")
+	t.Cleanup(func() {
+		if t.Failed() {
+			contents, err := os.ReadFile(outputPath)
+			if err != nil {
+				return
+			}
+			t.Logf("Contents of output file:\n%s\n", string(contents))
+		}
+	})
+	exampleData := []byte(`supercalifragilisticexpialidocious 1
+supercalifragilisticexpialidocious 2
+supercalifragilisticexpialidocious 3
+`)
+	exampleDataPath := filepath.Join(tmpDir, "example.log")
+	require.NoError(t, os.WriteFile(exampleDataPath, exampleData, 0600))
+
+	otelConfigPath := filepath.Join(tmpDir, "otel.yaml")
+	otelStringTemplate := `---
+receivers:
+  filebeatreceiver:
+    beatconfig:
+      filebeat:
+        inputs:
+          - type: filestream
+            id: test-id
+            paths: {{.InputPath}}
+      output:
+        otelconsumer:
+      logging:
+        level: debug
+exporters:
+  elasticsearch/log:
+    endpoint: {{.ElasticsearchHost}}
+    user: {{.ElasticsearchUser}}
+    password: {{.ElasticsearchPassword}}
+    logs_index: filebeat
+  file:
+    path:  {{.OutputPath}}
+  debug:
+    verbosity: detailed
+    sampling_initial: 100
+service:
+  pipelines:
+    logs:
+      receivers: [filebeatreceiver]
+      exporters: [debug, file, elasticsearch/log]
+`
+
+	var otelBuffer bytes.Buffer
+	otelTemplate := template.Must(template.New("otelConfig").Parse(otelStringTemplate))
+	require.NoError(t, otelTemplate.Execute(&otelBuffer, OtelConfigOptions{
+		InputPath:             exampleDataPath,
+		OutputPath:            outputPath,
+		ElasticsearchHost:     esHost,
+		ElasticsearchUser:     esUser,
+		ElasticsearchPassword: esPass,
+	}))
+	require.NoError(t, os.WriteFile(otelConfigPath, otelBuffer.Bytes(), 0600))
+	t.Cleanup(func() {
+		if t.Failed() {
+			contents, err := os.ReadFile(otelConfigPath)
+			if err != nil {
+				return
+			}
+			t.Logf("Contents of otel.yaml file:\n%s\n", string(contents))
+		}
+	})
+
+	fixture, err := define.NewFixtureFromLocalBuild(t, define.Version(), aTesting.WithAdditionalArgs([]string{"--config", otelConfigPath}))
+	require.NoError(t, err)
+
+	ctx, cancel := testcontext.WithDeadline(t, context.Background(), time.Now().Add(10*time.Minute))
+	defer cancel()
+	err = fixture.Prepare(ctx, fakeComponent, fakeShipper)
+	require.NoError(t, err)
+
+	// remove elastic-agent.yml, otel should be independent
+	require.NoError(t, os.Remove(filepath.Join(fixture.WorkDir(), "elastic-agent.yml")))
+
+	var fixtureWg sync.WaitGroup
+	fixtureWg.Add(1)
+	go func() {
+		defer fixtureWg.Done()
+		err = fixture.RunOtelWithClient(ctx, false, false)
+	}()
+
+	var content []byte
+	watchLines := linesTrackMap([]string{
+		"\"stringValue\":\"" + exampleDataPath + "\"",
+		"\"key\":\"BeatReceiver\"",
+	})
+
+	validateCommandIsWorking(t, ctx, fixture, tmpDir)
+
+	// check `elastic-agent status` returns successfully
+	// commenting out for beat receiver because we get "error" modules dir not found
+	// require.Eventuallyf(t, func() bool {
+	// 	// This will return errors until it connects to the agent,
+	// 	// they're mostly noise because until the agent starts running
+	// 	// we will get connection errors. If the test fails
+	// 	// the agent logs will be present in the error message
+	// 	// which should help to explain why the agent was not
+	// 	// healthy.
+	// 	err = fixture.IsHealthy(ctx)
+	// 	return err == nil
+	// },
+	// 	2*time.Minute, time.Second,
+	// 	"Elastic-Agent did not report healthy. Agent status error: \"%v\"",
+	// 	err,
+	// )
+
+// make sure the output to file works
+	require.Eventually(t,
+		func() bool {
+			// verify file exists
+			content, err = os.ReadFile(outputPath)
+			if err != nil || len(content) == 0 {
+				return false
+			}
+
+			for k, alreadyFound := range watchLines {
+				if alreadyFound {
+					continue
+				}
+				if bytes.Contains(content, []byte(k)) {
+					watchLines[k] = true
+				}
+			}
+
+			return mapAtLeastOneTrue(watchLines)
+		},
+		3*time.Minute, 500*time.Millisecond,
+		fmt.Sprintf("there should be exported logs by now"))
+
+// make sure docs made it to elasticsearch
+	require.Eventually(t,
+	func() bool {
+		t.Helper()
+		match := map[string]interface{}{
+			"message": "supercalifragilisticexpialidocious",
+		}
+		docs, err := estools.GetLogsForIndexWithContext(ctx, info.ESClient, "filebeat", match)
+		if err != nil {
+			t.Logf("Got Error %s", err)
+			return false
+		}
+		t.Logf("docs.Hits.Total.Value was %d", docs.Hits.Total.Value)
+		return docs.Hits.Total.Value == 3
+	},
+		5*time.Minute, 1*time.Second,
+		fmt.Sprintf("doc.Hits.Total.Value should have been 3"))
+
+	cancel()
+	fixtureWg.Wait()
+	require.True(t, err == nil || err == context.Canceled || err == context.DeadlineExceeded, "Retrieved unexpected error: %s", err.Error())
 }

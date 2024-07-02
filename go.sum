@@ -1781,8 +1781,8 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/lann/builder v0.0.0-20180802200727-47ae307949d0/go.mod h1:dXGbAdH5GtBTC4WfIxhKZfyBF/HBFgRZSWwZ9g/He9o=
 github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0/go.mod h1:vmVJ0l/dxyfGW6FmdpVm2joNMFikkuWg0EoCKLGUMNw=
-github.com/leehinman/beats/v7 v7.0.0-alpha2.0.20240627221915-fff6331558cc h1:P614n27E+CFH0P8x7r8zgPpWpGrzmNZ6Bj/OAiBMZpM=
-github.com/leehinman/beats/v7 v7.0.0-alpha2.0.20240627221915-fff6331558cc/go.mod h1:1eXzW/TNkx8HJoWW3WGJGXfEcLzcih6JiIXhRvQCOCY=
+github.com/leehinman/beats/v7 v7.0.0-alpha2.0.20240702183952-8245d5c3f4e5 h1:+bDECJmVi+4snxoslc4QqbtLqyorfpmlmja3NqdDPW8=
+github.com/leehinman/beats/v7 v7.0.0-alpha2.0.20240702183952-8245d5c3f4e5/go.mod h1:1eXzW/TNkx8HJoWW3WGJGXfEcLzcih6JiIXhRvQCOCY=
 github.com/leehinman/elastic-agent-libs v0.3.15-0.20240627180841-cbea5a594d7d h1:SMypxxZEi81s/vn3IdMQ1Bart85sAuohTf6VClN55wk=
 github.com/leehinman/elastic-agent-libs v0.3.15-0.20240627180841-cbea5a594d7d/go.mod h1:G9ljFvDE+muOOOQBf2eRituF0fE4suGkv25rfjTwY+c=
 github.com/leehinman/opentelemetry-collector-contrib/exporter/elasticsearchexporter v0.0.0-20240627185214-3068cd9ff51b h1:itG2OLyuBMYzpp9p8+PEYCCXisWupYynstSvZLXpf8o=
