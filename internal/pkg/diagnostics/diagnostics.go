@@ -25,6 +25,7 @@ import (
 
 	"github.com/elastic/elastic-agent/internal/pkg/agent/application/paths"
 	"github.com/elastic/elastic-agent/internal/pkg/release"
+	"github.com/elastic/elastic-agent/internal/pkg/runtimetracer"
 	"github.com/elastic/elastic-agent/pkg/component"
 	"github.com/elastic/elastic-agent/version"
 )
@@ -133,6 +134,21 @@ func GlobalHooks() Hooks {
 			Description: "stack traces of holders of contended mutexes",
 			ContentType: "application/octet-stream",
 			Hook:        pprofDiag("mutex", 0),
+		},
+		{
+			Name:        "runtime",
+			Filename:    "runtime.trace.out",
+			Description: "Runtime trace containing the last seconds of execution",
+			ContentType: "application/octet-stream",
+			Hook: func(_ context.Context) []byte {
+				var w bytes.Buffer
+				_, err := runtimetracer.WriteTo(&w)
+				if err != nil {
+					// error is returned as the content
+					return []byte(fmt.Sprintf("failed to write runtime flight-recorder traces: %s", err))
+				}
+				return w.Bytes()
+			},
 		},
 	}
 }

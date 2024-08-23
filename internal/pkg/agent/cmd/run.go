@@ -27,6 +27,7 @@ import (
 	"github.com/elastic/elastic-agent-libs/service"
 	"github.com/elastic/elastic-agent-system-metrics/report"
 	"github.com/elastic/elastic-agent/internal/pkg/agent/vault"
+	"github.com/elastic/elastic-agent/internal/pkg/runtimetracer"
 
 	"github.com/elastic/elastic-agent/internal/pkg/agent/application"
 	"github.com/elastic/elastic-agent/internal/pkg/agent/application/coordinator"
@@ -191,6 +192,14 @@ func runElasticAgent(ctx context.Context, cancel context.CancelFunc, override cf
 	if err != nil {
 		return logReturn(l, fmt.Errorf("failed to check for root/Administrator privileges: %w", err))
 	}
+
+	// TODO(mauri870): not sure if this is the right place to start the tracer
+	l.Info("Starting Runtime Tracer")
+	err = runtimetracer.Start()
+	if err != nil {
+		l.Error(errors.New(err, "failed to start runtime tracer"))
+	}
+	defer runtimetracer.Stop()
 
 	l.Infow("Elastic Agent started",
 		"process.pid", os.Getpid(),
