@@ -515,6 +515,8 @@ exporters:
     user: {{.ElasticsearchUser}}
     password: {{.ElasticsearchPassword}}
     logs_index: filebeat
+    mapping:
+      mode: raw
   file:
     path:  {{.OutputPath}}
   debug:
