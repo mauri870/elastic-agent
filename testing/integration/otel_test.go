@@ -20,6 +20,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1094,6 +1095,213 @@ service:
 		},
 		2*time.Minute, 1*time.Second,
 		"Expected at least %d logs, got %v", 1, actualHits)
+
+	cancel()
+	fixtureWg.Wait()
+	require.True(t, err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded), "Retrieved unexpected error: %s", err.Error())
+}
+
+func TestHybridAgentE2E(t *testing.T) {
+	info := define.Require(t, define.Requirements{
+		Group: Default,
+		Local: true,
+		OS: []define.OS{
+			{Type: define.Windows},
+			{Type: define.Linux},
+			{Type: define.Darwin},
+		},
+		Stack: &define.Stack{},
+	})
+	tmpDir := t.TempDir()
+	numEvents := 1
+	fbIndex := "logs-fb-default"
+	fbReceiverIndex := "logs-fbreceiver-default"
+
+	var inputFilePath string
+	inputFile, err := os.CreateTemp(tmpDir, "input.log")
+	require.NoError(t, err, "failed to create input log file")
+	for i := 0; i < numEvents; i++ {
+		_, err = inputFile.Write([]byte(fmt.Sprintf("Line %d\n", i)))
+		require.NoErrorf(t, err, "failed to write line %d to temp file", i)
+	}
+	err = inputFile.Close()
+	require.NoError(t, err, "failed to close data temp file")
+	inputFilePath = inputFile.Name()
+
+	t.Cleanup(func() {
+		if t.Failed() {
+			contents, err := os.ReadFile(inputFilePath)
+			if err != nil {
+				t.Logf("no data file to import at %s", inputFilePath)
+				return
+			}
+			t.Logf("contents of input file: %s\n", string(contents))
+		}
+	})
+
+	// Create the otel configuration file
+	type otelConfigOptions struct {
+		InputPath       string
+		HomeDir         string
+		ESEndpoint      string
+		ESApiKey        string
+		FBIndex         string
+		FBReceiverIndex string
+	}
+	esEndpoint, err := getESHost()
+	require.NoError(t, err, "error getting elasticsearch endpoint")
+	esApiKey, err := createESApiKey(info.ESClient)
+	require.NoError(t, err, "error creating API key")
+	require.True(t, len(esApiKey.Encoded) > 1, "api key is invalid %q", esApiKey)
+
+	// TODO: add some processors here
+	configTemplate := `filebeat.inputs:
+  - type: filestream
+    id: filestream-filebeat
+    enabled: true
+    paths:
+      - {{.InputPath}}
+output.elasticsearch:
+  hosts:
+    - {{.ESEndpoint}}
+  api_key: {{.ESApiKey}}
+  index: {{.FBIndex}}
+logging:
+  level: info
+  selectors:
+    - '*'
+processors:
+  - add_fields:
+      target: project
+      fields:
+        name: myproject
+path.home: {{.HomeDir}}/fb
+queue.mem.flush.timeout: 0s
+receivers:
+  filebeatreceiver:
+    filebeat:
+      inputs:
+        - type: filestream
+          id: filestream-fbreceiver
+          enabled: true
+          paths:
+            - {{.InputPath}}
+    output:
+      otelconsumer:
+    logging:
+      level: info
+      selectors:
+        - '*'
+    processors:
+      - add_fields:
+          target: project
+          fields:
+            name: myproject
+    path.home: {{.HomeDir}}/fbreceiver
+    queue.mem.flush.timeout: 0s
+exporters:
+  elasticsearch/log:
+    endpoints:
+      - {{.ESEndpoint}}
+    api_key: {{.ESApiKey}}
+    logs_index: {{.FBReceiverIndex}}
+    batcher:
+      enabled: true
+      flush_timeout: 1s
+    mapping:
+      mode: bodymap
+service:
+  pipelines:
+    logs:
+      receivers:
+        - filebeatreceiver
+      exporters:
+        - elasticsearch/log
+`
+	configPath := filepath.Join(tmpDir, "agent.yml")
+	var configBuffer bytes.Buffer
+	require.NoError(t,
+		template.Must(template.New("config").Parse(configTemplate)).Execute(&configBuffer,
+			otelConfigOptions{
+				InputPath:       inputFilePath,
+				HomeDir:         tmpDir,
+				ESEndpoint:      esEndpoint,
+				ESApiKey:        esApiKey.Encoded,
+				FBIndex:         fbIndex,
+				FBReceiverIndex: fbReceiverIndex,
+			}))
+	require.NoError(t, os.WriteFile(configPath, configBuffer.Bytes(), 0o600))
+	t.Cleanup(func() {
+		if t.Failed() {
+			contents, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Logf("No configuration file at %s", configPath)
+				return
+			}
+			t.Logf("Contents of agent config file:\n%s\n", string(contents))
+			// TODO(mauri870): for debugging, remove this line
+			require.NoError(t, os.WriteFile("/tmp/agent.yml", contents, 0o600))
+		}
+	})
+	// Now we can actually create the fixture and run it
+	fixture, err := define.NewFixtureFromLocalBuild(t, define.Version())
+	require.NoError(t, err)
+
+	ctx, cancel := testcontext.WithDeadline(t, context.Background(), time.Now().Add(5*time.Minute))
+	defer cancel()
+	err = fixture.Prepare(ctx, fakeComponent)
+	require.NoError(t, err)
+
+	var fixtureWg sync.WaitGroup
+	fixtureWg.Add(1)
+	go func() {
+		defer fixtureWg.Done()
+		err = fixture.Run(ctx, aTesting.State{
+			Configure: configBuffer.String(),
+			Reached: func(state *client.AgentState) bool {
+				// keep running (context cancel will stop it)
+				return false
+			},
+		})
+	}()
+
+	require.Eventually(t, func() bool {
+		err = fixture.IsHealthy(ctx)
+		if err != nil {
+			t.Logf("waiting for agent healthy: %s", err.Error())
+			return false
+		}
+		return true
+	}, 1*time.Minute, 1*time.Second)
+
+	var fbDocs, fbReceiverDocs estools.Documents
+	actualHits := &struct {
+		FB         int
+		FBReceiver int
+	}{}
+	require.Eventually(t,
+		func() bool {
+			findCtx, findCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer findCancel()
+
+			fbDocs, err = estools.GetLogsForIndexWithContext(findCtx, info.ESClient, ".ds-"+fbIndex+"*", map[string]interface{}{
+				"log.file.path": inputFilePath,
+			})
+
+			fbReceiverDocs, err = estools.GetLogsForIndexWithContext(findCtx, info.ESClient, ".ds-"+fbReceiverIndex+"*", map[string]interface{}{
+				"log.file.path": inputFilePath,
+			})
+			require.NoError(t, err)
+
+			actualHits.FB = fbDocs.Hits.Total.Value
+			actualHits.FBReceiver = fbReceiverDocs.Hits.Total.Value
+
+			return actualHits.FB == numEvents && actualHits.FBReceiver == numEvents
+		},
+		1*time.Minute, 1*time.Second,
+		"Expected %d logs in elasticsearch, got: %v", numEvents, actualHits)
+
+	require.Equal(t, "", cmp.Diff(fbDocs.Hits.Hits, fbReceiverDocs.Hits.Hits), "filebeat and fbreceiver docs are not equal")
 
 	cancel()
 	fixtureWg.Wait()
