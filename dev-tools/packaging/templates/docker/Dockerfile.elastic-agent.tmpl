@@ -109,6 +109,9 @@ LABEL \
   org.opencontainers.image.title="{{ .BeatName | title }}" \
   org.opencontainers.image.vendor="{{ .BeatVendor }}" \
   org.opencontainers.image.authors="infra@elastic.co" \
+  # "maintainer" is deprecated but must remain for backward compatibility
+  # to avoid breaking image publishing.
+  maintainer="infra@elastic.co" \
   name="{{ .BeatName }}" \
   vendor="{{ .BeatVendor }}" \
   version="{{ beat_version }}{{if .Snapshot}}-SNAPSHOT{{end}}" \
