@@ -478,5 +478,4 @@ service:
 
 		AssertMapsEqual(t, agent, otel, ignoredFields, "expected documents to be equal")
 	})
-
 }
