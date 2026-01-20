@@ -21,6 +21,8 @@ import (
 	"go.opentelemetry.io/collector/otelcol"
 )
 
+// This test verifies that the collector exposes the required otelcol and exporter metrics.
+// It serves as a safeguard to detect if any of these metrics are removed or renamed upstream.
 func TestInternalMonitoringLogsMetrics(t *testing.T) {
 	cfg := `receivers:
   filebeatreceiver:
@@ -117,11 +119,13 @@ service:
 	expectedMetrics := []string{
 		"otelcol_exporter_queue_capacity",
 		"otelcol_exporter_queue_size",
-		"otelcol_exporter_sent_log_records",
+		// needs traces data to be generated
 		// "otelcol_exporter_sent_spans",
-		// "otelcol_exporter_sent_metric_points",
-		"otelcol_exporter_send_failed_log_records",
 		// "otelcol_exporter_send_failed_spans",
+		"otelcol_exporter_sent_log_records",
+		"otelcol_exporter_send_failed_log_records",
+		// needs metrics data to be generated
+		// "otelcol_exporter_sent_metric_points",
 		// "otelcol_exporter_send_failed_metric_points",
 		"otelcol.elasticsearch.docs.processed",
 		"otelcol.elasticsearch.docs.retried",
