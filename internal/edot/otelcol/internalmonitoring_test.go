@@ -146,11 +146,7 @@ service:
 			}
 		}
 
-		if len(foundMetrics) == 0 {
-			t.Log("No metrics found")
-			return
-		}
-
+		assert.NotEmpty(c, foundMetrics, "No metrics found")
 		for _, expectedMetric := range expectedMetrics {
 			assert.True(c, foundMetrics[expectedMetric], "Expected metric %s not found", expectedMetric)
 		}

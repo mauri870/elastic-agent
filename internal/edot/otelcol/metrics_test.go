@@ -421,21 +421,15 @@ service:
 	monitoringReceived := make(chan mapstr.M, 1)
 
 	var eventCount int
-	failedEvents := make(map[string]struct{})
 	deterministicHandler := func(action api.Action, event []byte) int {
+		eventCount++
 		var curEvent mapstr.M
 		require.NoError(t, json.Unmarshal(event, &curEvent))
-		if _, ok := failedEvents[curEvent["@timestamp"].(string)]; ok {
-			return http.StatusBadRequest
-		}
-
 		if ok, _ := curEvent.HasKey("beat.stats"); ok && eventCount > 3 {
 			monitoringReceived <- curEvent
 			return http.StatusOK
 		}
 
-		eventCount++
-		failedEvents[curEvent["@timestamp"].(string)] = struct{}{}
 		return http.StatusBadRequest
 	}
 
@@ -489,11 +483,11 @@ service:
 		"beat.stats.libbeat.pipeline.queue.max_events":    float64(3200),
 		"beat.stats.libbeat.pipeline.queue.filled.events": float64(0),
 		"beat.stats.libbeat.pipeline.queue.filled.pct":    float64(0),
-		"beat.stats.libbeat.output.events.total":          float64(4),
+		"beat.stats.libbeat.output.events.total":          float64(3),
 		"beat.stats.libbeat.output.events.active":         float64(0),
-		"beat.stats.libbeat.output.events.acked":          float64(4),
-		"beat.stats.libbeat.output.events.dropped":        float64(4),
-		"beat.stats.libbeat.output.events.batches":        float64(4),
+		"beat.stats.libbeat.output.events.acked":          float64(3),
+		"beat.stats.libbeat.output.events.dropped":        float64(3),
+		"beat.stats.libbeat.output.events.batches":        float64(3),
 		// "beat.stats.libbeat.output.events.failed":         float64(0), // omitted if zero
 		"component.id": "elasticsearch/1",
 	}
