@@ -36,8 +36,6 @@ exporters:
   debug:
     verbosity: detailed
   elasticsearch/1:
-    mapping:
-      mode: bodymap
     endpoints:
       - {{.ESEndpoint}}
     max_conns_per_host: 1
@@ -49,8 +47,8 @@ exporters:
     sending_queue:
       batch:
         flush_timeout: 10s
-        max_size: 1600
-        min_size: 0
+        max_size: 1
+        min_size: 1
         sizer: items
       block_on_overflow: true
       enabled: true
@@ -142,17 +140,12 @@ service:
 	require.Empty(t, cmp.Diff(expected, ev), "metrics do not match expected values")
 }
 
-// TestMonitoringTelemetryMetricsPeriodic tests that the monitoring receiver ingests metrics after startup.
-func TestMonitoringTelemetryMetricsPeriodic(t *testing.T) {
+func TestMonitoringMetrics(t *testing.T) {
 	cfg := `receivers:
   elasticmonitoringreceiver:
     interval: 1s
 exporters:
-  debug:
-    verbosity: detailed
   elasticsearch/1:
-    mapping:
-      mode: bodymap
     endpoints:
       - {{.ESEndpoint}}
     max_conns_per_host: 1
@@ -178,7 +171,6 @@ service:
     logs:
       receivers: [elasticmonitoringreceiver]
       exporters:
-        #- debug
         - elasticsearch/1
 `
 
@@ -597,8 +589,6 @@ exporters:
   debug:
     verbosity: detailed
   elasticsearch/1:
-    mapping:
-      mode: bodymap
     endpoints:
       - {{.ESEndpoint}}
     max_conns_per_host: 1
