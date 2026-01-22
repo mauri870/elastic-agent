@@ -7,40 +7,40 @@ package otelcol
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 	"text/template"
 	"time"
 
-	"github.com/elastic/elastic-agent/internal/pkg/otel/internaltelemetry"
+	"github.com/elastic/elastic-agent-libs/mapstr"
 	"github.com/elastic/elastic-agent/testing/integration"
 	"github.com/elastic/mock-es/pkg/api"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 )
 
-// This test verifies that the collector exposes the required otelcol and exporter metrics.
+// This test verifies that the collector exposes the required otelcol and exporter metrics for traces, metrics and logs.
 // It serves as a safeguard to detect if any of these metrics are removed or renamed upstream.
 func TestInternalMonitoringLogsMetrics(t *testing.T) {
 	cfg := `receivers:
-  filebeatreceiver:
-      filebeat:
-        inputs:
-          - type: benchmark
-            enabled: true
-            message: "test message"
-            count: 10
-      logging:
-        level: error
-      queue.mem.flush.timeout: 0s
+  elasticmonitoringreceiver:
+    interval: 1s
+  loadgen:
+    concurrency: 1
+    metrics:
+      max_replay: 0
+    traces:
+      max_replay: 0
+    logs:
+      max_replay: 0
 exporters:
   debug:
     verbosity: detailed
   elasticsearch/1:
-    mapping:
-      mode: bodymap
     endpoints:
       - {{.ESEndpoint}}
     max_conns_per_host: 1
@@ -52,7 +52,7 @@ exporters:
     sending_queue:
       batch:
         flush_timeout: 10s
-        max_size: 1600
+        max_size: 1
         min_size: 0
         sizer: items
       block_on_overflow: true
@@ -63,25 +63,62 @@ exporters:
 
 service:
   pipelines:
+    #metrics:
+    #  receivers: [loadgen]
+    #  exporters:
+    #    - elasticsearch/1
+    #traces:
+    #  receivers: [loadgen]
+    #  exporters:
+    #    - elasticsearch/1
     logs:
-      receivers: [filebeatreceiver]
+      receivers: [loadgen, elasticmonitoringreceiver]
       exporters:
-        #- debug
         - elasticsearch/1
 `
 
+	// keep track of logs, traces and metrics separately
+	// inside handler: identify which kind of event it is. Reply with a success, retry or failed status based on counts
+	// Make sure we trigger all cases required for the metrics expectations
 	var eventCount int
+	var monitoringEventCount int
+	var logsCount int
+	var tracesCount int
+	var metricsCount int
+	monitoringReceived := make(chan mapstr.M, 1)
 	deterministicHandler := func(action api.Action, event []byte) int {
-		eventCount++
+		var curEvent mapstr.M
+		require.NoError(t, json.Unmarshal(event, &curEvent))
 
-		switch {
-		case eventCount <= 2:
-			return http.StatusTooManyRequests
-		case eventCount <= 5:
-			return http.StatusBadRequest
-		default:
+		if monitoringEventCount > 1 {
+			// stop accumulating metrics
 			return http.StatusOK
 		}
+
+		if ok, _ := curEvent.HasKey("beat.stats"); ok {
+			if monitoringEventCount > 0 {
+				monitoringReceived <- curEvent
+			}
+			monitoringEventCount++
+			return http.StatusOK
+		}
+
+		eventCount++
+		dsValue, err := curEvent.GetValue("data_stream.type")
+		assert.NoError(t, err, "data_stream.type must be present in event")
+		ds := dsValue.(string)
+		switch ds {
+		case "metrics":
+			metricsCount++
+		case "traces":
+			tracesCount++
+		case "logs":
+			logsCount++
+		default:
+			t.Fatal("data_stream.type not handled:", ds)
+		}
+
+		return http.StatusOK
 	}
 
 	esURL := integration.StartMockESDeterministic(t, deterministicHandler)
@@ -116,39 +153,32 @@ service:
 		wg.Wait()
 	}()
 
-	expectedMetrics := []string{
-		"otelcol_exporter_queue_capacity",
-		"otelcol_exporter_queue_size",
-		// needs traces data to be generated
-		// "otelcol_exporter_sent_spans",
-		// "otelcol_exporter_send_failed_spans",
-		"otelcol_exporter_sent_log_records",
-		"otelcol_exporter_send_failed_log_records",
-		// needs metrics data to be generated
-		// "otelcol_exporter_sent_metric_points",
-		// "otelcol_exporter_send_failed_metric_points",
-		"otelcol.elasticsearch.docs.processed",
-		"otelcol.elasticsearch.docs.retried",
-		"otelcol.elasticsearch.bulk_requests.count",
-		"otelcol.elasticsearch.flushed.bytes",
+	var ev mapstr.M
+	select {
+	case ev = <-monitoringReceived:
+		require.NotNil(t, ev, "monitoring event should not be nil")
+	case <-time.After(30 * time.Second):
+		t.Fatal("timeout waiting for monitoring event")
 	}
 
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		metrics, err := internaltelemetry.ReadMetrics(ctx)
-		if !assert.NoError(c, err) {
-			return
-		}
+	ev = ev.Flatten()
+	require.NotEmpty(t, ev["@timestamp"], "expected @timestamp to be set")
+	ev.Delete("@timestamp")
+	require.Greater(t, ev["beat.stats.libbeat.output.write.bytes"], float64(0))
+	ev.Delete("beat.stats.libbeat.output.write.bytes")
 
-		foundMetrics := make(map[string]bool)
-		for _, sm := range metrics.ScopeMetrics {
-			for _, met := range sm.Metrics {
-				foundMetrics[met.Name] = true
-			}
-		}
+	expected := mapstr.M{
+		"beat.stats.libbeat.pipeline.queue.max_events":    float64(3200),
+		"beat.stats.libbeat.pipeline.queue.filled.events": float64(1),
+		"beat.stats.libbeat.pipeline.queue.filled.pct":    float64(0.0003125),
+		"beat.stats.libbeat.output.events.total":          float64(logsCount + tracesCount + metricsCount + monitoringEventCount),
+		"beat.stats.libbeat.output.events.active":         float64(0),
+		"beat.stats.libbeat.output.events.acked":          float64(logsCount + tracesCount + metricsCount + monitoringEventCount),
+		"beat.stats.libbeat.output.events.dropped":        float64(0),
+		"beat.stats.libbeat.output.events.batches":        float64(logsCount + tracesCount + metricsCount + monitoringEventCount),
+		"component.id": "elasticsearch/1",
+		// "beat.stats.libbeat.output.events.failed":         float64(0), // omitted if zero
+	}
 
-		assert.NotEmpty(c, foundMetrics, "No metrics found")
-		for _, expectedMetric := range expectedMetrics {
-			assert.True(c, foundMetrics[expectedMetric], "Expected metric %s not found", expectedMetric)
-		}
-	}, 30*time.Second, 1*time.Second, "All expected metrics should be present")
+	require.Empty(t, cmp.Diff(expected, ev), "metrics do not match expected values")
 }
