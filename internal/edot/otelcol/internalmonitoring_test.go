@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync/atomic"
 	"testing"
 	"text/template"
 	"time"
@@ -28,7 +29,7 @@ import (
 func TestInternalMonitoringLogsMetrics(t *testing.T) {
 	cfg := `receivers:
   elasticmonitoringreceiver:
-    interval: 1s
+    interval: 3s
   loadgen:
     concurrency: 1
     metrics:
@@ -40,9 +41,31 @@ func TestInternalMonitoringLogsMetrics(t *testing.T) {
 exporters:
   debug:
     verbosity: detailed
-  elasticsearch/1:
+  elasticsearch/telemetry:
     endpoints:
-      - {{.ESEndpoint}}
+      - {{.ESTelemetry}}
+    max_conns_per_host: 1
+    retry:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 1m0s
+      max_retries: 1
+    sending_queue:
+      batch:
+        flush_timeout: 10s
+        max_size: 1
+        min_size: 0
+        sizer: items
+      block_on_overflow: true
+      enabled: true
+      num_consumers: 1
+      queue_size: 3200
+      wait_for_result: true
+  elasticsearch/monitoring:
+    mapping:
+      mode: bodymap
+    endpoints:
+      - {{.ESMonitoring}}
     max_conns_per_host: 1
     retry:
       enabled: true
@@ -63,47 +86,39 @@ exporters:
 
 service:
   pipelines:
+    logs/monitoring:
+      receivers: [elasticmonitoringreceiver]
+      exporters:
+        - elasticsearch/monitoring
     #metrics:
     #  receivers: [loadgen]
     #  exporters:
-    #    - elasticsearch/1
+    #    - elasticsearch/telemetry
     #traces:
     #  receivers: [loadgen]
     #  exporters:
-    #    - elasticsearch/1
+    #    - elasticsearch/telemetry
     logs:
-      receivers: [loadgen, elasticmonitoringreceiver]
+      receivers: [loadgen]
       exporters:
-        - elasticsearch/1
+        - elasticsearch/telemetry
 `
+	var done atomic.Bool
 
 	// keep track of logs, traces and metrics separately
 	// inside handler: identify which kind of event it is. Reply with a success, retry or failed status based on counts
 	// Make sure we trigger all cases required for the metrics expectations
-	var eventCount int
-	var monitoringEventCount int
 	var logsCount int
 	var tracesCount int
 	var metricsCount int
-	monitoringReceived := make(chan mapstr.M, 1)
-	deterministicHandler := func(action api.Action, event []byte) int {
+	telemetryHandler := func(action api.Action, event []byte) int {
 		var curEvent mapstr.M
 		require.NoError(t, json.Unmarshal(event, &curEvent))
 
-		if monitoringEventCount > 1 {
-			// stop accumulating metrics
+		if done.Load() {
 			return http.StatusOK
 		}
 
-		if ok, _ := curEvent.HasKey("beat.stats"); ok {
-			if monitoringEventCount > 0 {
-				monitoringReceived <- curEvent
-			}
-			monitoringEventCount++
-			return http.StatusOK
-		}
-
-		eventCount++
 		dsValue, err := curEvent.GetValue("data_stream.type")
 		assert.NoError(t, err, "data_stream.type must be present in event")
 		ds := dsValue.(string)
@@ -121,12 +136,42 @@ service:
 		return http.StatusOK
 	}
 
-	esURL := integration.StartMockESDeterministic(t, deterministicHandler)
+	esTelemetryURL := integration.StartMockESDeterministic(t, telemetryHandler)
+
+	var monitoringCount int
+	monitoringReceived := make(chan map[string]mapstr.M, 1)
+	monitoringMetrics := make(map[string]mapstr.M)
+	exporterSeen := make(map[string]bool)
+	monitoringHandler := func(action api.Action, event []byte) int {
+		var ev mapstr.M
+		require.NoError(t, json.Unmarshal(event, &ev))
+		ev = ev.Flatten()
+
+		exporterID := ev["component.id"].(string)
+
+		// skip startup metrics for each receiver
+		if !exporterSeen[exporterID] {
+			exporterSeen[exporterID] = true
+			return http.StatusOK
+		}
+		monitoringMetrics[exporterID] = ev
+
+		if len(monitoringMetrics) == 2 {
+			monitoringReceived <- monitoringMetrics
+			done.Store(true)
+		}
+
+		return http.StatusOK
+	}
+
+	esMonitoringURL := integration.StartMockESDeterministic(t, monitoringHandler)
 
 	configParams := struct {
-		ESEndpoint string
+		ESTelemetry  string
+		ESMonitoring string
 	}{
-		ESEndpoint: esURL,
+		ESTelemetry:  esTelemetryURL,
+		ESMonitoring: esMonitoringURL,
 	}
 
 	var configBuffer bytes.Buffer
@@ -153,15 +198,18 @@ service:
 		wg.Wait()
 	}()
 
-	var ev mapstr.M
+	var metrics map[string]mapstr.M
 	select {
-	case ev = <-monitoringReceived:
-		require.NotNil(t, ev, "monitoring event should not be nil")
+	case metrics = <-monitoringReceived:
+		require.NotNil(t, metrics, "monitoring event should not be nil")
 	case <-time.After(30 * time.Second):
 		t.Fatal("timeout waiting for monitoring event")
 	}
 
-	ev = ev.Flatten()
+	assert.Len(t, metrics, 2, "expected monitoring metrics for all exporters")
+	// check for telemetry metrics
+	ev := monitoringMetrics["elasticsearch/telemetry"]
+
 	require.NotEmpty(t, ev["@timestamp"], "expected @timestamp to be set")
 	ev.Delete("@timestamp")
 	require.Greater(t, ev["beat.stats.libbeat.output.write.bytes"], float64(0))
@@ -171,12 +219,12 @@ service:
 		"beat.stats.libbeat.pipeline.queue.max_events":    float64(3200),
 		"beat.stats.libbeat.pipeline.queue.filled.events": float64(1),
 		"beat.stats.libbeat.pipeline.queue.filled.pct":    float64(0.0003125),
-		"beat.stats.libbeat.output.events.total":          float64(logsCount + tracesCount + metricsCount + monitoringEventCount),
+		"beat.stats.libbeat.output.events.total":          float64(logsCount + tracesCount + metricsCount + monitoringCount),
 		"beat.stats.libbeat.output.events.active":         float64(0),
-		"beat.stats.libbeat.output.events.acked":          float64(logsCount + tracesCount + metricsCount + monitoringEventCount),
+		"beat.stats.libbeat.output.events.acked":          float64(logsCount + tracesCount + metricsCount + monitoringCount),
 		"beat.stats.libbeat.output.events.dropped":        float64(0),
-		"beat.stats.libbeat.output.events.batches":        float64(logsCount + tracesCount + metricsCount + monitoringEventCount),
-		"component.id": "elasticsearch/1",
+		"beat.stats.libbeat.output.events.batches":        float64(logsCount + tracesCount + metricsCount + monitoringCount),
+		"component.id": "elasticsearch/telemetry",
 		// "beat.stats.libbeat.output.events.failed":         float64(0), // omitted if zero
 	}
 
