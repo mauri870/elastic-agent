@@ -104,6 +104,9 @@ import (
 	// Telemetry
 	internaltelemetry "github.com/elastic/elastic-agent/internal/pkg/otel/internaltelemetry"
 	elasticmonitoringreceiver "github.com/elastic/elastic-agent/internal/pkg/otel/receivers/elasticmonitoring"
+
+	// Testing
+	"github.com/elastic/opentelemetry-collector-components/receiver/loadgenreceiver"
 )
 
 func components(extensionFactories ...extension.Factory) func() (otelcol.Factories, error) {
@@ -148,6 +151,7 @@ func components(extensionFactories ...extension.Factory) func() (otelcol.Factori
 			awss3receiver.NewFactory(),
 			windowsperfcountersreceiver.NewFactory(),
 			prometheusremotewritereceiver.NewFactory(),
+			loadgenreceiver.NewFactory(),
 		}
 
 		// some receivers are only available on certain OS.
