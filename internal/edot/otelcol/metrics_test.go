@@ -34,8 +34,6 @@ exporters:
   debug:
     verbosity: detailed
   elasticsearch/1:
-    mapping:
-      mode: bodymap
     endpoints:
       - {{.ESEndpoint}}
     max_conns_per_host: 1
@@ -156,8 +154,6 @@ exporters:
   debug:
     verbosity: detailed
   elasticsearch/1:
-    mapping:
-      mode: bodymap
     endpoints:
       - {{.ESEndpoint}}
     compression: none
@@ -167,8 +163,8 @@ exporters:
     sending_queue:
       batch:
         flush_timeout: 1s
-        max_size: 1600
-        min_size: 0
+        max_size: 1
+        min_size: 1
         sizer: items
       block_on_overflow: true
       enabled: true
@@ -189,7 +185,6 @@ service:
 
 	var eventCount int
 	deterministicHandler := func(action api.Action, event []byte) int {
-		eventCount++
 		var curEvent mapstr.M
 		require.NoError(t, json.Unmarshal(event, &curEvent))
 		if ok, _ := curEvent.HasKey("beat.stats"); ok && eventCount > 3 {
@@ -197,6 +192,7 @@ service:
 			return http.StatusOK
 		}
 
+		eventCount++
 		return http.StatusBadRequest
 	}
 
@@ -250,11 +246,11 @@ service:
 		"beat.stats.libbeat.pipeline.queue.max_events":    float64(3200),
 		"beat.stats.libbeat.pipeline.queue.filled.events": float64(0),
 		"beat.stats.libbeat.pipeline.queue.filled.pct":    float64(0),
-		"beat.stats.libbeat.output.events.total":          float64(3),
+		"beat.stats.libbeat.output.events.total":          float64(4),
 		"beat.stats.libbeat.output.events.active":         float64(0),
-		"beat.stats.libbeat.output.events.acked":          float64(3),
-		"beat.stats.libbeat.output.events.dropped":        float64(3),
-		"beat.stats.libbeat.output.events.batches":        float64(3),
+		"beat.stats.libbeat.output.events.acked":          float64(4),
+		"beat.stats.libbeat.output.events.dropped":        float64(4),
+		"beat.stats.libbeat.output.events.batches":        float64(4),
 		// "beat.stats.libbeat.output.events.failed":         float64(0), // omitted if zero
 		"component.id": "elasticsearch/1",
 	}
