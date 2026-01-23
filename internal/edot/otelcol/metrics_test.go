@@ -159,7 +159,10 @@ exporters:
     compression: none
     max_conns_per_host: 1
     retry:
-      enabled: false
+      enabled: true
+      initial_interval: 1s
+      max_interval: 1m0s
+      max_retries: 1
     sending_queue:
       batch:
         flush_timeout: 1s
@@ -183,16 +186,22 @@ service:
 
 	monitoringReceived := make(chan mapstr.M, 1)
 
-	var eventCount int
+	eventCount := 0
+	failedEvents := make(map[string]struct{})
 	deterministicHandler := func(action api.Action, event []byte) int {
 		var curEvent mapstr.M
 		require.NoError(t, json.Unmarshal(event, &curEvent))
+		if _, ok := failedEvents[curEvent["@timestamp"].(string)]; ok {
+			return http.StatusBadRequest
+		}
+
 		if ok, _ := curEvent.HasKey("beat.stats"); ok && eventCount > 3 {
 			monitoringReceived <- curEvent
 			return http.StatusOK
 		}
 
 		eventCount++
+		failedEvents[curEvent["@timestamp"].(string)] = struct{}{}
 		return http.StatusBadRequest
 	}
 
