@@ -17,9 +17,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"gopkg.in/yaml.v3"
 
-	componentmonitoring "github.com/elastic/elastic-agent/internal/pkg/agent/application/monitoring/component"
-
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/status"
+	otelstatus "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/status"
 	"go.opentelemetry.io/collector/component/componentstatus"
 	"go.opentelemetry.io/collector/confmap"
 	"go.uber.org/zap/zapcore"
@@ -27,6 +25,7 @@ import (
 	"github.com/elastic/elastic-agent-libs/logp"
 
 	"github.com/elastic/elastic-agent/internal/pkg/otel/monitoring"
+	"github.com/elastic/elastic-agent/internal/pkg/otel/status"
 	runtimeLogger "github.com/elastic/elastic-agent/pkg/component/runtime"
 	"github.com/elastic/elastic-agent/pkg/core/logger"
 	"github.com/elastic/elastic-agent/pkg/core/process"
@@ -80,20 +79,14 @@ type subprocessExecution struct {
 // processErrCh channel. Other run errors, such as not able to connect to the health endpoint, are sent to the runErrCh channel.
 func (r *subprocessExecution) startCollector(
 	ctx context.Context,
-	logLevel string,
-	baseLogger *logger.Logger,
+	lvl logp.Level,
+	collectorLogger *logger.Logger,
 	logger *logger.Logger,
 	cfg *confmap.Conf,
 	processErrCh chan error,
-	statusCh chan *status.AggregateStatus,
+	statusCh chan *otelstatus.AggregateStatus,
 	forceFetchStatusCh chan struct{},
 ) (collectorHandle, error) {
-	var lvl logp.Level
-	err := lvl.Unpack(logLevel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unpack the log level '%s': %w", logLevel, err)
-	}
-
 	if cfg == nil {
 		// configuration is required
 		return nil, errors.New("no configuration provided")
@@ -124,16 +117,16 @@ func (r *subprocessExecution) startCollector(
 		return nil, fmt.Errorf("failed to marshal config to yaml: %w", err)
 	}
 
-	stdOutLast := newZapLast(baseLogger.Core())
+	stdOutLast := newZapLast(collectorLogger.Core())
 	stdOut := runtimeLogger.NewLogWriterWithDefaults(stdOutLast, zapcore.Level(lvl))
 	// info level for stdErr because by default collector writes to stderr
-	stdErrLast := newZapLast(baseLogger.Core())
+	stdErrLast := newZapLast(collectorLogger.Core())
 	stdErr := runtimeLogger.NewLogWriterWithDefaults(stdErrLast, zapcore.Level(lvl))
 
 	procCtx, procCtxCancel := context.WithCancel(ctx)
 	env := os.Environ()
 	// Set the environment variable for the collector metrics port. See comment at the constant definition for more information.
-	env = append(env, fmt.Sprintf("%s=%d", componentmonitoring.OtelCollectorMetricsPortEnvVarName, collectorMetricsPort))
+	env = append(env, fmt.Sprintf("%s=%d", OtelCollectorMetricsPortEnvVarName, collectorMetricsPort))
 
 	// set collector args
 	collectorArgs := append(r.collectorArgs, fmt.Sprintf("--%s=%s", OtelSupervisedLoggingLevelFlagName, lvl))
@@ -171,7 +164,7 @@ func (r *subprocessExecution) startCollector(
 		defer func() {
 			close(healthCheckDone)
 		}()
-		currentStatus := aggregateStatus(componentstatus.StatusStarting, nil)
+		currentStatus := status.AggregateStatus(componentstatus.StatusStarting, nil)
 		r.reportSubprocessCollectorStatus(ctx, statusCh, currentStatus)
 
 		// specify a max duration of not being able to get the status from the collector
@@ -198,7 +191,7 @@ func (r *subprocessExecution) startCollector(
 			} else {
 				maxFailuresTimer.Reset(maxFailuresDuration)
 				removeManagedHealthCheckExtensionStatus(statuses, r.healthCheckExtensionID)
-				if !compareStatuses(currentStatus, statuses) {
+				if !status.CompareStatuses(currentStatus, statuses) {
 					currentStatus = statuses
 					r.reportSubprocessCollectorStatus(procCtx, statusCh, statuses)
 				}
@@ -214,11 +207,11 @@ func (r *subprocessExecution) startCollector(
 			case <-healthCheckPollTimer.C:
 				healthCheckPollTimer.Reset(healthCheckPollDuration)
 			case <-maxFailuresTimer.C:
-				failedToConnectStatuses := aggregateStatus(
+				failedToConnectStatuses := status.AggregateStatus(
 					componentstatus.StatusRecoverableError,
 					errors.New("failed to connect to collector"),
 				)
-				if !compareStatuses(currentStatus, failedToConnectStatuses) {
+				if !status.CompareStatuses(currentStatus, failedToConnectStatuses) {
 					currentStatus = statuses
 					r.reportSubprocessCollectorStatus(procCtx, statusCh, statuses)
 				}
@@ -265,17 +258,17 @@ func (r *subprocessExecution) startCollector(
 }
 
 // cloneCollectorStatus creates a deep copy of the provided AggregateStatus.
-func cloneCollectorStatus(aStatus *status.AggregateStatus) *status.AggregateStatus {
+func cloneCollectorStatus(aStatus *otelstatus.AggregateStatus) *otelstatus.AggregateStatus {
 	if aStatus == nil {
 		return nil
 	}
 
-	st := &status.AggregateStatus{
+	st := &otelstatus.AggregateStatus{
 		Event: aStatus.Event,
 	}
 
 	if len(aStatus.ComponentStatusMap) > 0 {
-		st.ComponentStatusMap = make(map[string]*status.AggregateStatus, len(aStatus.ComponentStatusMap))
+		st.ComponentStatusMap = make(map[string]*otelstatus.AggregateStatus, len(aStatus.ComponentStatusMap))
 		for k, cs := range aStatus.ComponentStatusMap {
 			st.ComponentStatusMap[k] = cloneCollectorStatus(cs)
 		}
@@ -284,7 +277,7 @@ func cloneCollectorStatus(aStatus *status.AggregateStatus) *status.AggregateStat
 	return st
 }
 
-func (r *subprocessExecution) reportSubprocessCollectorStatus(ctx context.Context, statusCh chan *status.AggregateStatus, collectorStatus *status.AggregateStatus) {
+func (r *subprocessExecution) reportSubprocessCollectorStatus(ctx context.Context, statusCh chan *otelstatus.AggregateStatus, collectorStatus *otelstatus.AggregateStatus) {
 	// we need to clone the status to prevent any mutation on the receiver side
 	// affecting the original ref
 	clonedStatus := cloneCollectorStatus(collectorStatus)
@@ -322,7 +315,7 @@ func (r *subprocessExecution) getCollectorPorts() (healthCheckPort int, metricsP
 	return healthCheckPort, metricsPort, nil
 }
 
-func removeManagedHealthCheckExtensionStatus(status *status.AggregateStatus, healthCheckExtensionID string) {
+func removeManagedHealthCheckExtensionStatus(status *otelstatus.AggregateStatus, healthCheckExtensionID string) {
 	extensions, exists := status.ComponentStatusMap["extensions"]
 	if !exists {
 		return

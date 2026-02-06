@@ -1011,9 +1011,9 @@ func (Cloud) Load() error {
 
 	devtools.FIPSBuild = fipsVal
 
-	source := "build/distributions/elastic-agent-cloud-" + agentVersion + "-SNAPSHOT-linux-" + runtime.GOARCH + ".docker.tar.gz"
+	source := devtools.DistributionsDir + "/elastic-agent-cloud-" + agentVersion + "-SNAPSHOT-linux-" + runtime.GOARCH + ".docker.tar.gz"
 	if fipsVal {
-		source = "build/distributions/elastic-agent-cloud-fips-" + agentVersion + "-SNAPSHOT-linux-" + runtime.GOARCH + ".docker.tar.gz"
+		source = devtools.DistributionsDir + "/elastic-agent-cloud-fips-" + agentVersion + "-SNAPSHOT-linux-" + runtime.GOARCH + ".docker.tar.gz"
 	}
 	if envSource, ok := os.LookupEnv("DOCKER_IMPORT_SOURCE"); ok && envSource != "" {
 		source = envSource
@@ -1225,7 +1225,7 @@ func packageAgent(ctx context.Context, dependenciesVersion string, manifestRespo
 	}
 
 	// build package and test
-	mg.SerialDeps(devtools.Package, TestPackages)
+	mg.SerialDeps(devtools.Package)
 	return nil
 }
 
@@ -1999,11 +1999,12 @@ type checksumFile struct {
 	Checksum string `yaml:"sha512"`
 }
 
-// Package packages elastic-agent for the IronBank distribution, relying on the
+// Ironbank packages elastic-agent for the IronBank distribution, relying on the
 // binaries having already been built.
 //
 // Use SNAPSHOT=true to build snapshots.
 func Ironbank() error {
+	fmt.Println("--- Package Ironbank distribution")
 	if runtime.GOARCH != "amd64" {
 		fmt.Printf(">> IronBank images are only supported for amd64 arch (%s is not supported)\n", runtime.GOARCH)
 		return nil
@@ -2026,9 +2027,8 @@ func saveIronbank() error {
 		return fmt.Errorf("cannot find the folder with the ironbank context: %+v", err)
 	}
 
-	distributionsDir := "build/distributions"
-	if _, err := os.Stat(distributionsDir); os.IsNotExist(err) {
-		err := os.MkdirAll(distributionsDir, 0o750)
+	if _, err := os.Stat(devtools.DistributionsDir); os.IsNotExist(err) {
+		err := os.MkdirAll(devtools.DistributionsDir, 0o750)
 		if err != nil {
 			return fmt.Errorf("cannot create folder for docker artifacts: %+v", err)
 		}
@@ -2042,7 +2042,7 @@ func saveIronbank() error {
 
 	// move the folder to the parent folder, there are two parent folder since
 	// buildDir contains a two folders dir.
-	tarGzFile := filepath.Join("..", "..", distributionsDir, ironbank+".tar.gz")
+	tarGzFile := filepath.Join("..", "..", devtools.DistributionsDir, ironbank+".tar.gz")
 
 	// Save the build context as tar.gz artifact
 	err := devtools.Tar("./", tarGzFile)
@@ -2384,8 +2384,25 @@ func (Integration) UpdatePackageVersion(ctx context.Context) error {
 		return fmt.Errorf("failed to get latest build for branch %q: %w", currentReleaseBranch, err)
 	}
 
+	// If a release is available with the same core version as the latest snapshot, use the release. This can
+	// happen after a new release, before a stack snapshot is available. In that event, older snapshots might not be
+	// available.
+	var stackVersion, stackBuildId string
+	releasesResponse, err := devtools.FetchStackReleases(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch stack releases: %w", err)
+	}
+	latestReleaseForBranch := releasesResponse.GetLatestPatchForMinor(currentReleaseBranch)
+	if latestReleaseForBranch != nil && strings.HasPrefix(branchInformation.Version, latestReleaseForBranch.Version) {
+		stackVersion = latestReleaseForBranch.Version
+		stackBuildId = ""
+	} else {
+		stackVersion = branchInformation.Version
+		stackBuildId = fmt.Sprintf("%s-SNAPSHOT", branchInformation.BuildID)
+	}
+
 	err = devtools.UpdatePackageVersion(
-		branchInformation.Version, branchInformation.BuildID,
+		branchInformation.Version, branchInformation.BuildID, stackVersion, stackBuildId,
 		branchInformation.ManifestURL, branchInformation.SummaryURL)
 	if err != nil {
 		return fmt.Errorf("failed to write package version: %w", err)
@@ -3663,8 +3680,44 @@ func (Otel) MetricbeatPrepareLightModules() error {
 	)
 }
 
-func (Otel) OsquerybeatFetchOsqueryDistros() {
+// StripOsquerydGolangCrossBuild runs inside of the cross-build container.
+// Don't call directly; this is called from otel:osquerybeatFetchOsqueryDistros.
+func (Otel) StripOsquerydGolangCrossBuild() error {
+	for _, platform := range devtools.Platforms {
+		if platform.GOOS() != os.Getenv("GOOS") || platform.Arch() != os.Getenv("GOARCH") {
+			// only run on specific os/arch combination
+			continue
+		}
+
+		var stripCmd string
+		var binaryPath string
+		switch platform.Arch() {
+		case "amd64":
+			stripCmd = "x86_64-linux-gnu-strip"
+			binaryPath = "build/data/install/linux/amd64/osqueryd"
+		case "arm64":
+			stripCmd = "aarch64-linux-gnu-strip"
+			binaryPath = "build/data/install/linux/arm64/osqueryd"
+		default:
+			return fmt.Errorf("unsupported architecture %s", platform.Arch())
+		}
+
+		err := sh.RunV(stripCmd, binaryPath)
+		if err != nil {
+			return fmt.Errorf("failed to strip osqueryd: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (Otel) OsquerybeatFetchOsqueryDistros() error {
 	mg.Deps(osquerybeat.FetchOsqueryDistros)
+
+	// crossBuild container is used to strip the osqueryd binary (strip needs to be built for the specific
+	// os/architecture for it to work properly)
+	opts := []devtools.CrossBuildOption{devtools.WithName("strip-osqueryd"), devtools.WithTarget("otel:stripOsquerydGolangCrossBuild"), devtools.ForPlatforms("linux")}
+	return devtools.CrossBuild(opts...)
 }
 
 // PrepareBeats converts the beats submodule's .git file to a real .git directory.
@@ -3862,8 +3915,10 @@ func (h Helm) RenderExamples() error {
 func (Helm) UpdateAgentVersion() error {
 	agentVersion := bversion.GetParsedAgentPackageVersion().CoreVersion()
 	agentSnapshotVersion := agentVersion + "-SNAPSHOT"
-	// until the Helm chart reaches GA this remains with -beta suffix
-	agentChartVersion := agentVersion + "-beta"
+	// until the Helm chart reaches GA this remains with -SNAPSHOT suffix
+	// that's to differentiate it from the released charts in the Helm repo using
+	// the same versioning scheme as the Unified Release process.
+	agentChartVersion := agentVersion + "-SNAPSHOT"
 
 	for yamlFile, keyVals := range map[string][]struct {
 		key   string
@@ -4140,6 +4195,7 @@ func (h Helm) UpdateDependencies() error {
 
 // Package packages the Elastic-Agent Helm chart. Note that you need to set SNAPSHOT="false" to build a production-ready package.
 func (h Helm) Package() error {
+	fmt.Println("--- Package Helm chart distribution")
 	mg.SerialDeps(h.BuildDependencies)
 
 	// need to explicitly set SNAPSHOT="false" to produce a production-ready package
@@ -4153,7 +4209,7 @@ func (h Helm) Package() error {
 		agentImageTag = agentImageTag + "-SNAPSHOT"
 	}
 
-	agentChartVersion := agentCoreVersion + "-beta"
+	agentChartVersion := agentCoreVersion + "-SNAPSHOT"
 	switch {
 	case productionPackage && agentVersion.Major() >= 9:
 		// for 9.0.0 and later versions, elastic-agent Helm chart is GA
@@ -4200,10 +4256,24 @@ func (h Helm) Package() error {
 	}
 
 	packageAction := action.NewPackage()
-	_, err = packageAction.Run(helmChartPath, nil)
+	packagePath, err := packageAction.Run(helmChartPath, nil)
 	if err != nil {
 		return fmt.Errorf("failed to package helm chart: %w", err)
 	}
+
+	// Create a copy with the DRA naming convention
+	// TODO: as soon as we confirm DRA works as expected we will replace the original naming
+	alternativeName := fmt.Sprintf("elastic-agent-helm-chart-%s.tgz", agentChartVersion)
+
+	srcFile := packagePath
+	dstFile := filepath.Join(devtools.DistributionsDir, alternativeName)
+
+	fmt.Printf(">>> CopyFile from %s to %s\n", srcFile, dstFile)
+	devtools.CreateDir(dstFile)
+	if err := copyFile(srcFile, dstFile); err != nil {
+		return fmt.Errorf("failed to create alternative package name: %w", err)
+	}
+
 	return nil
 }
 
