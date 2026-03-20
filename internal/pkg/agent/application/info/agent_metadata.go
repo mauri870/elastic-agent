@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/elastic/elastic-agent/pkg/features"
 
@@ -21,6 +22,15 @@ import (
 	"github.com/elastic/go-sysinfo"
 	"github.com/elastic/go-sysinfo/types"
 )
+
+var sysinfoHostOnce = sync.OnceValues(func() (types.Host, error) {
+	h, err := sysinfo.Host()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host information: %w", err)
+	}
+
+	return h, nil
+})
 
 // ECSMeta is a collection of agent related metadata in ECS compliant object form.
 type ECSMeta struct {
@@ -148,7 +158,7 @@ func Metadata(ctx context.Context, l *logger.Logger) (*ECSMeta, error) {
 
 // ECSMetadata returns an agent ECS compliant metadata.
 func (i *AgentInfo) ECSMetadata(l *logger.Logger) (*ECSMeta, error) {
-	sysInfo, err := sysinfo.Host()
+	sysInfo, err := sysinfoHostOnce()
 	if err != nil {
 		return nil, err
 	}

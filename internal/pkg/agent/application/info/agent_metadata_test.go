@@ -17,6 +17,7 @@ import (
 	"github.com/elastic/elastic-agent/internal/pkg/release"
 	"github.com/elastic/elastic-agent/internal/pkg/testutils"
 	"github.com/elastic/elastic-agent/internal/pkg/util"
+	"github.com/elastic/elastic-agent/pkg/core/logger"
 	"github.com/elastic/elastic-agent/pkg/features"
 )
 
@@ -63,4 +64,21 @@ func TestECSMetadata(t *testing.T) {
 	assert.Equal(t, info.OS.Version, metadata.OS.Version)
 	assert.Equal(t, info.OS.Name, metadata.OS.Name)
 	assert.Equal(t, getFullOSName(info), metadata.OS.FullName)
+}
+
+var m *ECSMeta
+
+func BenchmarkECSMetadata(b *testing.B) {
+	agentInfo := new(AgentInfo)
+	agentInfo.agentID = "fake-agent-id"
+	agentInfo.logLevel = "trace"
+	agentInfo.unprivileged = true
+
+	l := logger.NewWithoutConfig("bench")
+
+	for b.Loop() {
+		metadata, err := agentInfo.ECSMetadata(l)
+		require.NoError(b, err)
+		m = metadata
+	}
 }
