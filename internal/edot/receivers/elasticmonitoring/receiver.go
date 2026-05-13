@@ -163,35 +163,28 @@ func (mr *monitoringReceiver) sendLogRecord(beatEvent mapstr.M, componentID stri
 
 	sourceLogs.Scope().Attributes().PutStr("elastic.mapping.mode", "bodymap")
 
-	// Set timestamp
 	now := time.Now()
-	beatEvent["@timestamp"] = now
 	timestamp := pcommon.NewTimestampFromTime(now)
 	logRecord.SetTimestamp(timestamp)
 	logRecord.SetObservedTimestamp(timestamp)
 
-	// Convert fields to OTel-primitive types, if needed
-	otelmap.ConvertNonPrimitive(beatEvent)
-
 	// Add data_stream metadata to the log record attributes
-	if val, _ := beatEvent.GetValue("data_stream"); val != nil {
+	if ds, ok := beatEvent["data_stream"].(mapstr.M); ok {
 		for _, subField := range []string{"dataset", "namespace", "type"} {
-			value, err := beatEvent.GetValue("data_stream." + subField)
-			if vStr, ok := value.(string); ok && err == nil {
-				// set log record attribute only if value is non empty
+			if vStr, ok := ds[subField].(string); ok {
 				logRecord.Attributes().PutStr("data_stream."+subField, vStr)
 			}
 		}
 	}
 
-	// Set log record body to computed fields
-	if err := logRecord.Body().SetEmptyMap().FromRaw(map[string]any(beatEvent)); err != nil {
+	bodyMap := logRecord.Body().SetEmptyMap()
+	if err := otelmap.FromMapstr(bodyMap, beatEvent); err != nil {
 		mr.logger.Error("couldn't convert map to plog.Log, some fields might be missing", zap.Error(err))
 	}
+	bodyMap.PutStr("@timestamp", otelmap.FormatTimestamp(now))
 
 	err := mr.consumer.ConsumeLogs(mr.runCtx, pLogs)
 	if err != nil && mr.runCtx.Err() == nil {
-		// Don't log an error if the context is cancelled, that's just a normal shutdown
 		mr.logger.Error("error sending internal telemetry log record", zap.String("component.id", componentID), zap.Error(err))
 	}
 }
