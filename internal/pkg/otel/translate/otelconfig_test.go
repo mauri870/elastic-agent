@@ -414,6 +414,7 @@ func TestGetOtelConfig(t *testing.T) {
 				"enabled": false,
 			},
 			"management.otel.enabled": true,
+			"native_events_enabled":   true,
 		}
 		return config
 	}
@@ -464,6 +465,7 @@ func TestGetOtelConfig(t *testing.T) {
 			"enabled": false,
 		},
 		"management.otel.enabled": true,
+		"native_events_enabled":   true,
 	}
 
 	tests := []struct {
@@ -776,6 +778,7 @@ func TestGetOtelConfig(t *testing.T) {
 							"enabled": false,
 						},
 						"management.otel.enabled": true,
+						"native_events_enabled": true,
 					},
 				},
 				"service": map[string]any{
@@ -1374,6 +1377,7 @@ func TestGetOtelConfig(t *testing.T) {
 							"enabled": false,
 						},
 						"management.otel.enabled": true,
+						"native_events_enabled": true,
 					},
 				},
 				"service": map[string]any{
@@ -1574,6 +1578,7 @@ func TestGetOtelConfig(t *testing.T) {
 							"enabled": false,
 						},
 						"management.otel.enabled": true,
+						"native_events_enabled": true,
 					},
 				},
 				"service": map[string]any{
@@ -1689,6 +1694,7 @@ func TestGetOtelConfig(t *testing.T) {
 							"enabled": false,
 						},
 						"management.otel.enabled": true,
+						"native_events_enabled": true,
 					},
 				},
 				"service": map[string]any{
@@ -1807,6 +1813,7 @@ func TestGetOtelConfig(t *testing.T) {
 							"enabled": false,
 						},
 						"management.otel.enabled": true,
+						"native_events_enabled": true,
 						"shared_intake_queue":     "default",
 					},
 				},
@@ -1970,6 +1977,7 @@ func TestGetOtelConfig(t *testing.T) {
 							"enabled": false,
 						},
 						"management.otel.enabled": true,
+						"native_events_enabled": true,
 					},
 				},
 				"service": map[string]any{

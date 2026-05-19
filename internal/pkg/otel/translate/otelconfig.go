@@ -437,6 +437,8 @@ func getReceiversConfigForComponent(
 		}
 	}
 
+	receiverConfig["native_events_enabled"] = true
+
 	if comp.OutputType == "kafka" || comp.OutputType == "logstash" {
 		receiverConfig["include_metadata"] = true
 	}
