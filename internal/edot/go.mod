@@ -1,6 +1,6 @@
 module github.com/elastic/elastic-agent/internal/edot
 
-go 1.26.3
+go 1.26.4
 
 // use in-repo directory
 replace github.com/elastic/elastic-agent => ../../
@@ -11,9 +11,9 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2 v2.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions v1.3.0
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/elastic/beats/v7 v7.0.0-alpha2.0.20260518142635-5586a1dcc31a
+	github.com/elastic/beats/v7 v7.0.0-alpha2.0.20260522214348-71d0f09b5402
 	github.com/elastic/elastic-agent v0.0.0-00010101000000-000000000000
-	github.com/elastic/elastic-agent-libs v0.42.2
+	github.com/elastic/elastic-agent-libs v0.43.1
 	github.com/elastic/mock-es v0.0.0-20250530054253-8c3b6053f9b6
 	github.com/elastic/opentelemetry-collector-components/connector/elasticapmconnector v0.50.0
 	github.com/elastic/opentelemetry-collector-components/connector/profilingmetricsconnector v0.50.0
@@ -30,6 +30,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.152.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter v0.152.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/loadbalancingexporter v0.152.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/extension/azureauthextension v0.152.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.152.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/awslogsencodingextension v0.152.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/azureencodingextension v0.152.0
@@ -101,6 +102,7 @@ require (
 	github.com/bluekeyes/go-gitdiff v0.7.1 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
+	github.com/coreos/go-oidc/v3 v3.18.0 // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
 	github.com/elastic/ebpfevents v0.9.0 // indirect
 	github.com/elastic/entcollect v0.0.0-20260514013106-6d4034497b3d // indirect
@@ -381,7 +383,7 @@ require (
 	github.com/elastic/bayeux v1.0.5 // indirect
 	github.com/elastic/elastic-agent-autodiscover v0.10.3-0.20260423154939-e990715f9426 // indirect
 	github.com/elastic/elastic-agent-client/v7 v7.18.1 // indirect
-	github.com/elastic/elastic-agent-system-metrics v0.14.3 // indirect
+	github.com/elastic/elastic-agent-system-metrics v0.14.4 // indirect
 	github.com/elastic/elastic-transport-go/v8 v8.11.0 // indirect
 	github.com/elastic/go-concert v0.3.1 // indirect
 	github.com/elastic/go-docappender/v2 v2.14.1 // indirect
@@ -639,7 +641,7 @@ require (
 	github.com/twmb/franz-go/plugin/kzap v1.1.2 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/ua-parser/uap-go v0.0.0-20251207011819-db9adb27a0b8 // indirect
-	github.com/ugorji/go/codec v1.2.7 // indirect
+	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
 	github.com/vmware/govmomi v0.53.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect

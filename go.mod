@@ -1,6 +1,6 @@
 module github.com/elastic/elastic-agent
 
-go 1.26.3
+go 1.26.4
 
 replace github.com/elastic/beats/v7 => ./beats
 
@@ -15,13 +15,14 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/docker/go-units v0.5.0
 	github.com/dolmen-go/contextio v0.0.0-20200217195037-68fc5150bcd5
-	github.com/elastic/beats/v7 v7.0.0-alpha2.0.20260518142635-5586a1dcc31a
+	github.com/elastic/beats/v7 v7.0.0-alpha2.0.20260522214348-71d0f09b5402
 	github.com/elastic/cloud-on-k8s/v3 v3.4.0
 	github.com/elastic/elastic-agent-autodiscover v0.10.3-0.20260423154939-e990715f9426
 	github.com/elastic/elastic-agent-client/v7 v7.18.1
-	github.com/elastic/elastic-agent-libs v0.42.2
-	github.com/elastic/elastic-agent-system-metrics v0.14.3
+	github.com/elastic/elastic-agent-libs v0.43.1
+	github.com/elastic/elastic-agent-system-metrics v0.14.4
 	github.com/elastic/elastic-transport-go/v8 v8.11.0
+	github.com/elastic/fleet-server/pkg/api v0.0.0-20260515154942-99dc973fd52e
 	github.com/elastic/go-elasticsearch/v8 v8.19.6
 	github.com/elastic/go-licenser v0.4.2
 	github.com/elastic/go-sysinfo v1.15.4
@@ -91,7 +92,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/gotestsum v1.13.0
-	helm.sh/helm/v3 v3.20.2
+	helm.sh/helm/v3 v3.21.0
 	howett.net/plist v1.0.1
 	k8s.io/api v0.35.3
 	k8s.io/apimachinery v0.35.3
@@ -124,7 +125,6 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/DefangLabs/secret-detector v0.0.0-20250403165618-22662109213e // indirect
-	github.com/IBM/sarama v1.48.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
@@ -134,29 +134,16 @@ require (
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/apache/thrift v0.23.1-0.20260429145742-d2acd3c49e58 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
-	github.com/aws/aws-msk-iam-sasl-signer-go v1.0.4 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.41.7 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.32.17 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.16 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.23 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.30.17 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.21 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
-	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/buger/goterm v1.0.4 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/cilium/ebpf v0.21.0 // indirect
+	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/compose-spec/compose-go/v2 v2.10.2 // indirect
 	github.com/containerd/console v1.0.5 // indirect
 	github.com/containerd/containerd v1.7.30 // indirect
@@ -187,7 +174,7 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/eiannone/keyboard v0.0.0-20220611211555-0d226195f203 // indirect
-	github.com/elastic/go-concert v0.3.0 // indirect
+	github.com/elastic/go-concert v0.3.1 // indirect
 	github.com/elastic/go-docappender/v2 v2.14.1 // indirect
 	github.com/elastic/go-freelru v0.16.0 // indirect
 	github.com/elastic/go-lumber v0.1.2-0.20220819171948-335fde24ea0f // indirect
@@ -253,13 +240,11 @@ require (
 	github.com/in-toto/in-toto-golang v0.10.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf // indirect
-	github.com/jaegertracing/jaeger-idl v0.6.0 // indirect
 	github.com/jaypipes/pcidb v1.0.0 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
-	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmoiron/sqlx v1.4.0 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
@@ -270,13 +255,13 @@ require (
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/lestrrat-go/strftime v1.1.1 // indirect
-	github.com/lib/pq v1.10.9 // indirect
+	github.com/lib/pq v1.11.2 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.16 // indirect
+	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mattn/go-shellwords v1.0.12 // indirect
 	github.com/mileusna/useragent v1.3.5 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
@@ -307,20 +292,11 @@ require (
 	github.com/morikuni/aec v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter v0.152.0 // indirect
+	github.com/oapi-codegen/runtime v1.4.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.152.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.152.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/kafka v0.152.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal v0.152.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/core/xidutils v0.152.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/kafka/configkafka v0.152.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/kafka/topic v0.152.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.152.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/jaeger v0.152.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/zipkin v0.152.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/openzipkin/zipkin-go v0.4.3 // indirect
 	github.com/osquery/osquery-go v0.0.0-20260226222546-0cc22f415e57 // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -336,7 +312,6 @@ require (
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/rubenv/sql-migrate v1.8.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
@@ -360,11 +335,6 @@ require (
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240814133006-030d3b2625d0 // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
 	github.com/tonistiigi/vt100 v0.0.0-20240514184818-90bafcd6abab // indirect
-	github.com/twmb/franz-go v1.21.1 // indirect
-	github.com/twmb/franz-go/pkg/kadm v1.18.0 // indirect
-	github.com/twmb/franz-go/pkg/kmsg v1.13.1 // indirect
-	github.com/twmb/franz-go/pkg/sasl/kerberos v1.1.0 // indirect
-	github.com/twmb/franz-go/plugin/kzap v1.1.2 // indirect
 	github.com/urfave/cli/v2 v2.27.7 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
