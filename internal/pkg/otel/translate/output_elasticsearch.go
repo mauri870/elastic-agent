@@ -123,7 +123,7 @@ func ESToOTelConfig(output *config.C, _ string, logger *logp.Logger) (map[string
 			"batch": map[string]any{
 				"flush_timeout": getFlushTimeout(logger, output),
 				"max_size":      escfg.BulkMaxSize, // bulk_max_size
-				"min_size":      0,                 // 0 means immediately trigger a flush
+				"min_size":      getFlushMinEvents(logger, output),
 				"sizer":         "items",
 			},
 			"enabled":           true,
