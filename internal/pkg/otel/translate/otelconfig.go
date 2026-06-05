@@ -453,9 +453,10 @@ func getReceiversConfigForComponent(
 		receiverConfig["include_metadata"] = true
 	}
 
-	// add the output queue config if present
-	if outputQueueConfig != nil {
-		receiverConfig["queue"] = outputQueueConfig
+	receiverConfig["queue"] = map[string]any{
+		"slab": map[string]any{
+			"events": 4096,
+		},
 	}
 	if intakeQueueID != "" {
 		receiverConfig["shared_intake_queue"] = intakeQueueID
@@ -682,6 +683,7 @@ func getInputsForUnit(unit component.Unit, info info.Agent, defaultDataStreamTyp
 		} else if _, ok := input["type"]; !ok {
 			input["type"] = inputType
 		}
+
 	}
 
 	return inputs, nil

@@ -502,12 +502,8 @@ func TestGetOtelConfig(t *testing.T) {
 				"data": filepath.Join(paths.Run(), id),
 			},
 			"queue": map[string]any{
-				"mem": map[string]any{
-					"events": uint64(3200),
-					"flush": map[string]any{
-						"min_events": uint64(1600),
-						"timeout":    "10s",
-					},
+				"slab": map[string]any{
+					"events": 4096,
 				},
 			},
 			"logging": map[string]any{
@@ -667,12 +663,8 @@ func TestGetOtelConfig(t *testing.T) {
 			"data": filepath.Join(paths.Run(), "beat-metrics-monitoring"),
 		},
 		"queue": map[string]any{
-			"mem": map[string]any{
-				"events": float64(3200),
-				"flush": map[string]any{
-					"min_events": float64(1600),
-					"timeout":    "10s",
-				},
+			"slab": map[string]any{
+				"events": 4096,
 			},
 		},
 		"logging": map[string]any{
@@ -979,12 +971,8 @@ func TestGetOtelConfig(t *testing.T) {
 							"data": filepath.Join(paths.Run(), "beat-metrics-monitoring"),
 						},
 						"queue": map[string]any{
-							"mem": map[string]any{
-								"events": float64(3200),
-								"flush": map[string]any{
-									"min_events": float64(1600),
-									"timeout":    "10s",
-								},
+							"slab": map[string]any{
+								"events": 4096,
 							},
 						},
 						"logging": map[string]any{
@@ -1552,12 +1540,8 @@ func TestGetOtelConfig(t *testing.T) {
 							"data": filepath.Join(paths.Run(), "beat-metrics-monitoring2"),
 						},
 						"queue": map[string]any{
-							"mem": map[string]any{
-								"events": float64(3200),
-								"flush": map[string]any{
-									"min_events": float64(1600),
-									"timeout":    "10s",
-								},
+							"slab": map[string]any{
+								"events": 4096,
 							},
 						},
 						"logging": map[string]any{
@@ -1752,12 +1736,8 @@ func TestGetOtelConfig(t *testing.T) {
 							"data": filepath.Join(paths.Run(), "beat-metrics-monitoring"),
 						},
 						"queue": map[string]any{
-							"mem": map[string]any{
-								"events": uint64(3200),
-								"flush": map[string]any{
-									"min_events": uint64(1600),
-									"timeout":    "10s",
-								},
+							"slab": map[string]any{
+								"events": 4096,
 							},
 						},
 						"logging": map[string]any{
@@ -1867,12 +1847,8 @@ func TestGetOtelConfig(t *testing.T) {
 							"data": filepath.Join(paths.Run(), "system-metrics"),
 						},
 						"queue": map[string]any{
-							"mem": map[string]any{
-								"events": uint64(3200),
-								"flush": map[string]any{
-									"min_events": uint64(1600),
-									"timeout":    "10s",
-								},
+							"slab": map[string]any{
+								"events": 4096,
 							},
 						},
 						"logging": map[string]any{
@@ -1985,12 +1961,8 @@ func TestGetOtelConfig(t *testing.T) {
 							"data": filepath.Join(paths.Run(), "system-metrics"),
 						},
 						"queue": map[string]any{
-							"mem": map[string]any{
-								"events": uint64(3200),
-								"flush": map[string]any{
-									"min_events": uint64(1600),
-									"timeout":    "10s",
-								},
+							"slab": map[string]any{
+								"events": 4096,
 							},
 						},
 						"logging": map[string]any{
@@ -2636,11 +2608,7 @@ func TestGetReceiversConfigForComponent(t *testing.T) {
 			assert.Contains(t, receiverConfig, tt.expectedBeatName, fmt.Sprintf("%s config should be present", tt.expectedBeatName))
 
 			// Verify queue configuration presence
-			if tt.outputQueueConfig != nil {
-				assert.Contains(t, receiverConfig, "queue", "queue config should be present")
-			} else {
-				assert.NotContains(t, receiverConfig, "queue", "queue config should not be present")
-			}
+			assert.Contains(t, receiverConfig, "queue", "queue config should be present")
 
 			// Verify HTTP monitoring is disabled for OTel-managed beat receivers
 			assert.Contains(t, receiverConfig, "http", "http monitoring config should be present")
